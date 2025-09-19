@@ -19,7 +19,7 @@ jobs:
       - name: Build libfiowrapper.so, libfioinfo.so
         run: make release
       - name: Release
-        uses: actions/upload-artifact@v4
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             libfiowrapper.so
