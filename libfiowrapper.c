@@ -22,8 +22,13 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <linux/stat.h>
 
 #include "libfiodef.h"
+
+#ifndef __clang__
+#  define _Nullable
+#endif
 
 #define AFL_FILE_NAME ".cur_input"
 struct _AFL_MEMORY_FILE_
@@ -472,6 +477,26 @@ int open(const char *pathname, int flags, ...)
     return _posix_open(pathname, flags);
 }
 
+int open64(const char *pathname, int flags, ...)
+{
+#ifdef DEBUG
+    printf("open64 - path:%s\n", pathname);
+#endif
+    if (strstr(pathname, AFL_FILE_NAME) != NULL)
+    {
+        if (!afl_input_file.memory)
+        {
+            // TODO Fix later
+        }
+        #ifdef DEBUG
+            printf("FD AFL IS :%d\n", afl_input_file.fd);
+        #endif
+        return afl_input_file.fd;
+    }
+    
+    return _posix_open(pathname, flags);
+}
+
 ssize_t read(int fd, void *buf, size_t count)
 {
 #ifdef DEBUG
@@ -585,6 +610,79 @@ int fileno_unlocked(FILE *stream)
 #endif
 
 
+int stat(const char *restrict path, struct stat *restrict buf)
+{
+#ifdef DEBUG
+    printf("fstat - path:%s\n", path);
+#endif
+    return _posix_stat(path, buf);
+}
+
+void print_statx(const struct statx *st) {
+    printf("stx_mask: %#x\n", st->stx_mask);
+    printf("stx_blksize: %u\n", st->stx_blksize);
+    printf("stx_attributes: %#llx\n", (unsigned long long) st->stx_attributes);
+    printf("stx_nlink: %u\n", st->stx_nlink);
+    printf("stx_uid: %u\n", st->stx_uid);
+    printf("stx_gid: %u\n", st->stx_gid);
+    printf("stx_mode: %o\n", st->stx_mode);
+    printf("stx_ino: %llu\n", (unsigned long long) st->stx_ino);
+    printf("stx_size: %llu\n", (unsigned long long) st->stx_size);
+    printf("stx_blocks: %llu\n", (unsigned long long) st->stx_blocks);
+    printf("stx_attributes_mask: %llu\n", (unsigned long long) st->stx_attributes_mask);
+
+    printf("stx_atime: %lld sec, %u nsec\n",
+           (long long) st->stx_atime.tv_sec, st->stx_atime.tv_nsec);
+    printf("stx_btime: %lld sec, %u nsec\n",
+           (long long) st->stx_btime.tv_sec, st->stx_btime.tv_nsec);
+    printf("stx_ctime: %lld sec, %u nsec\n",
+           (long long) st->stx_ctime.tv_sec, st->stx_ctime.tv_nsec);
+    printf("stx_mtime: %lld sec, %u nsec\n",
+           (long long) st->stx_mtime.tv_sec, st->stx_mtime.tv_nsec);
+
+    printf("stx_rdev_major: %u\n", st->stx_rdev_major);
+    printf("stx_rdev_minor: %u\n", st->stx_rdev_minor);
+    printf("stx_dev_major: %u\n", st->stx_dev_major);
+    printf("stx_dev_minor: %u\n", st->stx_dev_minor);
+}
+
+int statx(int dirfd, const char *_Nullable restrict pathname,
+    int flags, unsigned int mask,
+    struct statx *restrict statxbuf)
+{
+#ifdef DEBUG
+    printf("statx \n");
+#endif
+    if (dirfd == afl_input_file.fd)
+    {
+        statxbuf->stx_mask = 0x17ff;
+        statxbuf->stx_blksize = 4096;
+        statxbuf->stx_attributes = 0;
+        statxbuf->stx_nlink = 0;
+        statxbuf->stx_uid = 1000;
+        statxbuf->stx_gid = 1000;
+        statxbuf->stx_mode = S_IFREG | 0777;;
+        statxbuf->stx_ino = 287667426198522448;
+        statxbuf->stx_size = afl_input_file.size;
+        statxbuf->stx_blocks = (afl_input_file.size + 512 - 1) / 512;
+        statxbuf->stx_attributes_mask = 2109440;
+        statxbuf->stx_atime.tv_sec = 1740734118;
+        statxbuf->stx_atime.tv_nsec = 983490000;
+        statxbuf->stx_btime.tv_sec = 0;
+        statxbuf->stx_btime.tv_nsec = 0;
+        statxbuf->stx_ctime.tv_sec = 1740735432;
+        statxbuf->stx_ctime.tv_nsec = 360305400;
+        statxbuf->stx_mtime.tv_sec = 1740658100;
+        statxbuf->stx_mtime.tv_nsec = 467775000;
+        statxbuf->stx_rdev_major = 0;
+        statxbuf->stx_rdev_minor = 0;
+        statxbuf->stx_dev_major = 0;
+        statxbuf->stx_dev_minor = 82;
+        return 0;
+    }
+    return _posix_statx(dirfd, pathname, flags, mask, statxbuf);;
+}
+
 /*
  * Library constructor
  */
@@ -624,6 +722,11 @@ __attribute__((constructor)) static void init(void)
     _posix_write = (ssize_t (*)(int fd, const void *buf, size_t count))dlsym(RTLD_NEXT, "write");
     _posix_lseek = (off_t (*)(int fd, off_t offset, int whence))dlsym(RTLD_NEXT, "lseek");
     _posix_close = (int (*)(int fd))dlsym(RTLD_NEXT, "close");
+
+    _posix_stat = (int (*)(const char *file_name, struct stat *buf))dlsym(RTLD_NEXT, "stat");
+    _posix_statx = (int (*)(int dirfd, const char *_Nullable restrict pathname,
+        int flags, unsigned int mask,
+        struct statx *restrict statxbuf))dlsym(RTLD_NEXT, "statx");
 
     // get ourselves an fd
     int fd = _posix_open("/dev/null", 2 /* O_RDWR */);

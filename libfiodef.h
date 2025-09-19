@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <sys/stat.h>
 
 /*
  * THe pointer definitions for the original functions that are hooked.
@@ -48,6 +49,11 @@ static int (* _posix_open)(const char *pathname, int flags, ...);
 static ssize_t (* _posix_read)(int fd, void *buf, size_t count);
 static ssize_t (* _posix_write)(int fd, const void *buf, size_t count);
 static off_t (* _posix_lseek)(int fd, off_t offset, int whence);
+static int (* _posix_stat)(const char *file_name, struct stat *buf);
+
+static int (* _posix_statx)(int dirfd, const char * restrict pathname,
+    int flags, unsigned int mask,
+    struct statx *restrict statxbuf);
 
 static int (* _posix_close)(int fd);
 
