@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdbool.h>
 #include <linux/stat.h>
 
 #include "libfiodef.h"
@@ -31,6 +32,7 @@
 #endif
 
 #define AFL_FILE_NAME ".cur_input"
+#define AFL_FILE_NAME_FOR_CMIN ".input"
 struct _AFL_MEMORY_FILE_
 {
     // This definition is very limited for now
@@ -62,6 +64,11 @@ void set_memory_ptr(unsigned char *buffer)
     afl_input_file.stream = &_fake_file;
 }
 
+bool check_afl_filename(const char *path)
+{
+    return strstr(path, AFL_FILE_NAME) != NULL || strstr(path, AFL_FILE_NAME_FOR_CMIN) != NULL;
+}
+
 /*
  * Function sets the "size" of the shared memory.
  * The shared memory from AFL is fixed size. This is needed to understand where the input ends.
@@ -89,7 +96,7 @@ FILE *_fopen(const char *path, const char *mode)
 #ifdef DEBUG
     printf("fopen - path:%s, mode:%s\n", path, mode);
 #endif
-    if (strstr(path, AFL_FILE_NAME) != NULL)
+    if (check_afl_filename(path))
     {
         // AFL input file
         if (!afl_input_file.memory)
@@ -466,7 +473,7 @@ int open(const char *pathname, int flags, ...)
 #ifdef DEBUG
     printf("open - path:%s\n", pathname);
 #endif
-    if (strstr(pathname, AFL_FILE_NAME) != NULL)
+    if (check_afl_filename(pathname))
     {
         if (!afl_input_file.memory)
         {
@@ -482,7 +489,7 @@ int open64(const char *pathname, int flags, ...)
 #ifdef DEBUG
     printf("open64 - path:%s\n", pathname);
 #endif
-    if (strstr(pathname, AFL_FILE_NAME) != NULL)
+    if (check_afl_filename(pathname))
     {
         if (!afl_input_file.memory)
         {
