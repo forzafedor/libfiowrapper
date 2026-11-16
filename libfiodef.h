@@ -46,6 +46,9 @@ static int (*_libc_fileno_unlocked)(FILE *stream);
 
 // POSIX functions
 static int (* _posix_open)(const char *pathname, int flags, ...);
+#if defined(_LARGEFILE64_SOURCE) && !defined(__APPLE__)
+static int (* _posix_open64)(const char *pathname, int flags, ...);
+#endif
 static ssize_t (* _posix_read)(int fd, void *buf, size_t count);
 static ssize_t (* _posix_write)(int fd, const void *buf, size_t count);
 static off_t (* _posix_lseek)(int fd, off_t offset, int whence);
