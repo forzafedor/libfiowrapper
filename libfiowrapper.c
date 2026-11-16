@@ -18,7 +18,8 @@
 #define _GNU_SOURCE
 
 #include <dlfcn.h>
-
+#include <fcntl.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -467,11 +468,22 @@ int fclose(FILE *stream)
         return _libc_fclose(stream);
 }
 
-// TODO Fix argument passing
 int open(const char *pathname, int flags, ...)
 {
+    mode_t mode = 0;
+    if ((flags & O_CREAT) || ((flags & O_TMPFILE) == O_TMPFILE))
+    {
+        va_list args;
+        va_start(args, flags);
+        mode = va_arg(args, mode_t);
+        va_end(args);
+    }
+
 #ifdef DEBUG
-    printf("open - path:%s\n", pathname);
+    if (mode != 0)
+        printf("open - path:%s, flags:%#x, mode:%#o\n", pathname, flags, mode);
+    else
+        printf("open - path:%s, flags:%#x\n", pathname, flags);
 #endif
     if (check_afl_filename(pathname))
     {
@@ -481,13 +493,25 @@ int open(const char *pathname, int flags, ...)
         }
         return afl_input_file.fd;
     }
-    return _posix_open(pathname, flags);
+    return _posix_open(pathname, flags, mode);
 }
 
 int open64(const char *pathname, int flags, ...)
 {
+    mode_t mode = 0;
+    if ((flags & O_CREAT) || ((flags & O_TMPFILE) == O_TMPFILE))
+    {
+        va_list args;
+        va_start(args, flags);
+        mode = va_arg(args, mode_t);
+        va_end(args);
+    }
+
 #ifdef DEBUG
-    printf("open64 - path:%s\n", pathname);
+    if (mode != 0)
+        printf("open64 - path:%s, flags:%#x, mode:%#o\n", pathname, flags, mode);
+    else
+        printf("open64 - path:%s, flags:%#x\n", pathname, flags);
 #endif
     if (check_afl_filename(pathname))
     {
@@ -500,8 +524,8 @@ int open64(const char *pathname, int flags, ...)
         #endif
         return afl_input_file.fd;
     }
-    
-    return _posix_open(pathname, flags);
+
+    return _posix_open64(pathname, flags, mode);
 }
 
 ssize_t read(int fd, void *buf, size_t count)
@@ -725,6 +749,9 @@ __attribute__((constructor)) static void init(void)
     _libc_fileno_unlocked = (int (*)(FILE *stream))dlsym(RTLD_NEXT, "fileno_unlocked");
 
     _posix_open = (int (*)(const char *pathname, int flags, ...))dlsym(RTLD_NEXT, "open");
+#if defined(_LARGEFILE64_SOURCE) && !defined(__APPLE__)
+    _posix_open64 = (int (*)(const char *pathname, int flags, ...))dlsym(RTLD_NEXT, "open64");
+#endif
     _posix_read = (ssize_t (*)(int fd, void *buf, size_t count))dlsym(RTLD_NEXT, "read");
     _posix_write = (ssize_t (*)(int fd, const void *buf, size_t count))dlsym(RTLD_NEXT, "write");
     _posix_lseek = (off_t (*)(int fd, off_t offset, int whence))dlsym(RTLD_NEXT, "lseek");
